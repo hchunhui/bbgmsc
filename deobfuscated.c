@@ -1,5 +1,6 @@
 #include <SDL2/SDL.h>
 #include <stdint.h>
+#include "bbk/bbk.h"
 
 #define PULL mem(++S, 1, 0, 0)
 #define PUSH(x) mem(S--, 1, x, 1)
@@ -53,8 +54,13 @@ uint16_t scany,          // Scanline Y
 
 int shift_at = 0;
 
+int mapper;
+BBK bbk;
+
 // Read a byte from CHR ROM or CHR RAM.
 uint8_t *get_chr_byte(uint16_t a) {
+  if (mapper == 171)
+    return map_chraddr(&bbk, a);
   return &chrrom[chr[a >> chrbits] << chrbits | a % (1 << chrbits)];
 }
 
@@ -123,12 +129,20 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
       W = 0;
       return tmp;
     }
+    return 0;
     break;
 
   case 4:
-    if (write && lo == 20) // $4014 OAM DMA
+    if (write && lo == 20) { // $4014 OAM DMA
       for (uint16_t i = 256; i--;)
         oam[i] = mem(i, val, 0, 0);
+      return 0;
+    }
+
+    if (mapper == 171) {
+      return bbk_memlow(&bbk, addr, val, write);
+    }
+
     // $4016 Joypad 1
     for (tmp = 0, hi = 8; hi--;)
       tmp = tmp * 2 + key_state[(uint8_t[]){
@@ -159,7 +173,7 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
   default: // $8000...$ffff ROM
     // handle mapper writes
     if (write)
-      switch (rombuf[6] >> 4) {
+      switch (mapper) {
       case 7: // mapper 7
         mirror = !(val / 16);
         prg[0] = val % 8 * 2;
@@ -230,7 +244,16 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
           prg[0] = !tmp ? 0 : tmp == 1 ? prgbank : prgbank & ~1;
           prg[1] = !tmp ? prgbank : tmp == 1 ? rombuf[4] - 1 : prgbank | 1;
         }
+        break;
+      case 171: // mapper 171
+        return bbk_mem(&bbk, addr, val, write);
+        break;
       }
+    switch (mapper) {
+    case 171:
+      return bbk_mem(&bbk, addr, val, write);
+      break;
+    }
     return rom[(prg[hi - 8 >> prgbits - 12] & (rombuf[4] << 14 - prgbits) - 1)
                    << prgbits |
                addr & (1 << prgbits) - 1];
@@ -250,6 +273,7 @@ uint8_t read_pc() {
 uint8_t set_nz(uint8_t val) { return P = P & 125 | val & 128 | !val * 2; }
 
 int main(int argc, char **argv) {
+  int tmp2 = 0;
   SDL_RWread(SDL_RWFromFile(argv[1], "rb"), rombuf, 1024 * 1024, 1);
   // Start PRG0 after 16-byte header.
   rom = rombuf + 16;
@@ -268,6 +292,10 @@ int main(int argc, char **argv) {
     chrbits -= 2;      // 1kb CHR banks
   }
 
+  mapper = (rombuf[7] & 0xf0) | (rombuf[6] >> 4);
+  if (mapper == 171)
+    bbk_reset(&bbk, rom, argv[2]);
+
   // Start at address in reset vector, at $FFFC.
   PCL = mem(~3, ~0, 0, 0);
   PCH = mem(~2, ~0, 0, 0);
@@ -278,10 +306,14 @@ int main(int argc, char **argv) {
   // top or bottom 8 rows. Scaling up by 4x gives 1024x960, but that looks
   // squished because the NES doesn't have square pixels. So shrink it by 7/8.
   void *renderer = SDL_CreateRenderer(
-      SDL_CreateWindow("smolnes", 0, 0, 1024, 840, SDL_WINDOW_SHOWN), -1,
-      SDL_RENDERER_PRESENTVSYNC);
+      SDL_CreateWindow("smolnes", 0, 0, 1024, 960, SDL_WINDOW_SHOWN), -1,
+      0);
   void *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565,
-                                    SDL_TEXTUREACCESS_STREAMING, 256, 224);
+                                    SDL_TEXTUREACCESS_STREAMING, 256, 240);
+
+  const int TARGET_FPS = 50;
+  const int FRAME_DELAY = 1000 / TARGET_FPS;
+  Uint32 frame_start = SDL_GetTicks();
 
 loop:
   cycles = nomem = 0;
@@ -558,7 +590,12 @@ loop:
 
   // Update PPU, which runs 3 times faster than CPU. Each CPU instruction
   // takes at least 2 cycles.
-  for (tmp = cycles * 3 + 6; tmp--;) {
+  tmp = cycles * 3 + 6;
+  if (++tmp2 == 5) {
+    tmp++;
+    tmp2 = 0;
+  }
+  for (; tmp--;) {
     if (ppumask & 24) { // If background or sprites are enabled.
       if (scany < 240) {
         if (dot - 256 > 63u) {  // dot [0..255,320..340]
@@ -675,6 +712,16 @@ loop:
       // Reset vertical VRAM address to T value.
       if (scany == 261 && dot - 280 < 25u)  // dot [280..304]
         V = V & 0x841f | T & 0x7be0;
+
+      // XXX: doesn't work well
+      if (mapper == 171) {
+        if (dot == 256)
+          bbk_hsync(&bbk, scany);
+        if (bbk.irq) {
+          bbk.irq = 0;
+          nmi_irq = 1;
+        }
+      }
     }
 
     if (dot == 1) {
@@ -685,7 +732,7 @@ loop:
         ppustatus |= 128;
         // Render frame, skipping the top and bottom 8 pixels (they're often
         // garbage).
-        SDL_UpdateTexture(texture, 0, frame_buffer + 2048, 512);
+        SDL_UpdateTexture(texture, 0, frame_buffer, 512);
         SDL_RenderCopy(renderer, texture, 0, 0);
         SDL_RenderPresent(renderer);
         // Handle SDL events.
@@ -695,7 +742,7 @@ loop:
       }
 
       // Clear ppustatus.
-      if (scany == 261)
+      if (mapper != 171 && scany == 261)
         ppustatus = 0;
     }
 
@@ -705,6 +752,13 @@ loop:
       dot = 0;
       scany++;
       scany %= 262;
+      if (scany == 0) {
+        int t = SDL_GetTicks() - frame_start;
+        if (FRAME_DELAY > t) {
+          SDL_Delay(FRAME_DELAY - t);
+        }
+        frame_start = SDL_GetTicks();
+      }
     }
   }
   goto loop;
