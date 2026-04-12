@@ -1,4 +1,16 @@
+#ifdef __wasm__
+#define SDL_SCANCODE_X 27
+#define SDL_SCANCODE_Z 29
+#define SDL_SCANCODE_TAB 43
+#define SDL_SCANCODE_RETURN 40
+#define SDL_SCANCODE_UP 82
+#define SDL_SCANCODE_DOWN 81
+#define SDL_SCANCODE_LEFT 80
+#define SDL_SCANCODE_RIGHT 79
+#else
 #include <SDL2/SDL.h>
+#endif
+
 #include <stdint.h>
 #include "bbk/bbk.h"
 
@@ -271,10 +283,78 @@ uint8_t read_pc() {
 
 // Set N (negative) and Z (zero) flags of `P` register, based on `val`.
 uint8_t set_nz(uint8_t val) { return P = P & 125 | val & 128 | !val * 2; }
+void init(char *fdd);
+int loop();
 
+#ifdef __wasm__
+#include <string.h>
+#include <stdio.h>
+void set_rom(char *name) {
+  FILE *fp = fopen(name, "rb");
+  fseek(fp, 0, SEEK_END);
+  int size = ftell(fp);
+  rewind(fp);
+  fread(rombuf, 1, size, fp);
+  fclose(fp);
+}
+
+void *get_frame_buffer() {
+  return frame_buffer;
+}
+
+void *get_key_state() {
+  static uint8_t k[256];
+  key_state = k;
+  return key_state;
+}
+
+void loop_many() {
+  while (loop() != 2);
+}
+#else
 int main(int argc, char **argv) {
-  int tmp2 = 0;
   SDL_RWread(SDL_RWFromFile(argv[1], "rb"), rombuf, 1024 * 1024, 1);
+  init(argv[2]);
+  SDL_Init(SDL_INIT_VIDEO);
+  key_state = (uint8_t*)SDL_GetKeyboardState(0);
+  // Create window 1024x840. The framebuffer is 256x240, but we don't draw the
+  // top or bottom 8 rows. Scaling up by 4x gives 1024x960, but that looks
+  // squished because the NES doesn't have square pixels. So shrink it by 7/8.
+  void *renderer = SDL_CreateRenderer(
+      SDL_CreateWindow("smolnes", 0, 0, 1024, 960, SDL_WINDOW_SHOWN), -1,
+      0);
+  void *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565,
+                                    SDL_TEXTUREACCESS_STREAMING, 256, 240);
+  const int TARGET_FPS = 50;
+  const int FRAME_DELAY = 1000 / TARGET_FPS;
+  Uint32 frame_start = SDL_GetTicks();
+  while (1) {
+    switch (loop()) {
+    case 1:
+      // Render frame, skipping the top and bottom 8 pixels (they're often
+      // garbage).
+      SDL_UpdateTexture(texture, 0, frame_buffer, 512);
+      SDL_RenderCopy(renderer, texture, 0, 0);
+      SDL_RenderPresent(renderer);
+      // Handle SDL events.
+      for (SDL_Event event; SDL_PollEvent(&event);)
+        if (event.type == SDL_QUIT)
+          return 0;
+      break;
+    case 2:
+      int t = SDL_GetTicks() - frame_start;
+      if (FRAME_DELAY > t) {
+        SDL_Delay(FRAME_DELAY - t);
+      }
+      frame_start = SDL_GetTicks();
+      break;
+    }
+  }
+  return 0;
+}
+#endif
+
+void init(char *fdd) {
   // Start PRG0 after 16-byte header.
   rom = rombuf + 16;
   // PRG1 is the last bank. `rombuf[4]` is the number of 16k PRG banks.
@@ -294,28 +374,16 @@ int main(int argc, char **argv) {
 
   mapper = (rombuf[7] & 0xf0) | (rombuf[6] >> 4);
   if (mapper == 171)
-    bbk_reset(&bbk, rom, argv[2]);
+    bbk_reset(&bbk, rom, fdd);
 
   // Start at address in reset vector, at $FFFC.
   PCL = mem(~3, ~0, 0, 0);
   PCH = mem(~2, ~0, 0, 0);
+}
 
-  SDL_Init(SDL_INIT_VIDEO);
-  key_state = (uint8_t*)SDL_GetKeyboardState(0);
-  // Create window 1024x840. The framebuffer is 256x240, but we don't draw the
-  // top or bottom 8 rows. Scaling up by 4x gives 1024x960, but that looks
-  // squished because the NES doesn't have square pixels. So shrink it by 7/8.
-  void *renderer = SDL_CreateRenderer(
-      SDL_CreateWindow("smolnes", 0, 0, 1024, 960, SDL_WINDOW_SHOWN), -1,
-      0);
-  void *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565,
-                                    SDL_TEXTUREACCESS_STREAMING, 256, 240);
-
-  const int TARGET_FPS = 50;
-  const int FRAME_DELAY = 1000 / TARGET_FPS;
-  Uint32 frame_start = SDL_GetTicks();
-
-loop:
+int loop() {
+  int ret = 0;
+  static int tmp2;
   cycles = nomem = 0;
   if (nmi_irq)
     goto nmi_irq;
@@ -730,15 +798,7 @@ loop:
         if (ppuctrl & 128)
           nmi_irq = 4;
         ppustatus |= 128;
-        // Render frame, skipping the top and bottom 8 pixels (they're often
-        // garbage).
-        SDL_UpdateTexture(texture, 0, frame_buffer, 512);
-        SDL_RenderCopy(renderer, texture, 0, 0);
-        SDL_RenderPresent(renderer);
-        // Handle SDL events.
-        for (SDL_Event event; SDL_PollEvent(&event);)
-          if (event.type == SDL_QUIT)
-            return 0;
+        ret = 1;
       }
 
       // Clear ppustatus.
@@ -753,13 +813,9 @@ loop:
       scany++;
       scany %= 262;
       if (scany == 0) {
-        int t = SDL_GetTicks() - frame_start;
-        if (FRAME_DELAY > t) {
-          SDL_Delay(FRAME_DELAY - t);
-        }
-        frame_start = SDL_GetTicks();
+        ret = 2;
       }
     }
   }
-  goto loop;
+  return ret;
 }
