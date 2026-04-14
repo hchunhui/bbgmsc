@@ -296,6 +296,38 @@ function start()
                 const screen = document.getElementById('screen');
                 screen.focus();
 
+                // web audio
+                const audctx = new window.AudioContext;
+                const audlen = instance.exports.wasm_getaudiolen();
+                const mf64 = new Float64Array(instance.exports.memory.buffer);
+
+                const n = 1;
+                const dummybuf = audctx.createBuffer(1, audlen * n, 44100);
+                const dummysrc = audctx.createBufferSource();
+
+                const audcb = audctx.createScriptProcessor(audlen * n, 1, 1);
+                audcb.addEventListener(
+                    "audioprocess",
+                    (ev) => {
+                        const out = ev.outputBuffer;
+                        for (let j = 0; j < n; j++) {
+                            const ap = instance.exports.wasm_getaudio() / 8;
+                            for (let ch = 0; ch < 1; ch++) {
+                                const buf = out.getChannelData(ch);
+                                const off = audlen * ch;
+                                for (let i = 0; i < audlen; i++) {
+                                    buf[audlen * j + i] = mf64[ap + off + i];
+                                }
+                            }
+                        }
+                    });
+                audcb.connect(audctx.destination);
+
+                dummysrc.buffer = dummybuf;
+                dummysrc.loop = true;
+                dummysrc.connect(audcb);
+                dummysrc.start();
+
                 function main_loop() {
                     setTimeout(main_loop, 20);
                     instance.exports.loop_many();

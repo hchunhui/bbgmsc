@@ -117,8 +117,6 @@ uint8_t bbk_memlow(BBK *bbk, uint16_t addr, uint8_t val, uint8_t write)
 		return *ptr;
 	}
 	switch (addr) {
-	case 0x4000 ... 0x4015:
-		break;
 	case 0x4016:
 		if (write) {
 			Joy_Write4016(val);

@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include "bbk/bbk.h"
+#include "apu.h"
 
 #define PULL mem(++S, 1, 0, 0)
 #define PUSH(x) mem(S--, 1, x, 1)
@@ -68,6 +69,7 @@ int shift_at = 0;
 
 int mapper;
 BBK bbk;
+APU apu;
 
 // Read a byte from CHR ROM or CHR RAM.
 uint8_t *get_chr_byte(uint16_t a) {
@@ -149,6 +151,10 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
       for (uint16_t i = 256; i--;)
         oam[i] = mem(i, val, 0, 0);
       return 0;
+    }
+
+    if (addr >= 0x4000 && addr <= 0x4013 || addr == 0x4015) {
+      return apu_mem(&apu, addr, val, write);
     }
 
     if (mapper == 171) {
@@ -311,11 +317,28 @@ void *get_key_state() {
 void loop_many() {
   while (loop() != 2);
 }
+
+#define SAMPLE_NUM 2048
+static double audiobuf[SAMPLE_NUM];
+static int16_t buf[SAMPLE_NUM];
+int wasm_getaudiolen()
+{
+  return SAMPLE_NUM;
+}
+
+double *wasm_getaudio()
+{
+  apu_callback(&apu, (void *) buf, SAMPLE_NUM * 2);
+  for (int i = 0; i < SAMPLE_NUM; i++) {
+    audiobuf[i] = buf[i] / 32768.0f;
+  }
+  return audiobuf;
+}
 #else
 int main(int argc, char **argv) {
   SDL_RWread(SDL_RWFromFile(argv[1], "rb"), rombuf, 1024 * 1024, 1);
   init(argv[2]);
-  SDL_Init(SDL_INIT_VIDEO);
+  SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
   key_state = (uint8_t*)SDL_GetKeyboardState(0);
   // Create window 1024x840. The framebuffer is 256x240, but we don't draw the
   // top or bottom 8 rows. Scaling up by 4x gives 1024x960, but that looks
@@ -325,6 +348,22 @@ int main(int argc, char **argv) {
       0);
   void *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565,
                                     SDL_TEXTUREACCESS_STREAMING, 256, 240);
+  apu_reset(&apu);
+  SDL_AudioSpec aspec;
+  SDL_zero(aspec);
+  aspec.freq = SAMPLING_RATE;
+  aspec.format = AUDIO_S16SYS;
+  aspec.channels = 1;
+  aspec.samples = 2048;
+  aspec.callback = apu_callback;
+  aspec.userdata = &apu;
+  SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &aspec, NULL, 0);
+  if (dev == 0) {
+    printf("Failed to open audio: %s\n", SDL_GetError());
+    return 1;
+  }
+  SDL_PauseAudioDevice(dev, 0);
+
   const int TARGET_FPS = 50;
   const int FRAME_DELAY = 1000 / TARGET_FPS;
   Uint32 frame_start = SDL_GetTicks();
