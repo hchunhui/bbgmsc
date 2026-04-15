@@ -15,10 +15,10 @@ WARN=-std=c99 \
 		 -Wno-switch
 SDLFLAGS=$(shell pkg-config --cflags --libs sdl2)
 
-smolnes: deobfuscated.c apu.c bbk/bbk.c bbk/nes_fdc.c bbk/nes_joy.c
+smolnes: deobfuscated.c apu.c bbk/bbk.c bbk/nes_fdc.c bbk/nes_joy.c bbk/LPC_D6_SYNTH.c
 	$(CC) -O2 -o $@ $^$> ${SDLFLAGS} -g ${WARN}
 
-smolnes.wasm: deobfuscated.c apu.c bbk/bbk.c bbk/nes_fdc.c bbk/nes_joy.c wasm/libc/libc.c
+smolnes.wasm: deobfuscated.c apu.c bbk/bbk.c bbk/nes_fdc.c bbk/nes_joy.c bbk/LPC_D6_SYNTH.c wasm/libc/libc.c
 	clang --target=wasm32 -O3 -nostdlib -fno-builtin -ffunction-sections -fdata-sections -fvisibility=default -I wasm/libc ${CFLAGS} -Wl,--gc-sections -Wl,--export-dynamic -Wl,--no-entry -Wl,--strip-all -Wl,--allow-undefined -o $@ $^$>
 
 clean:

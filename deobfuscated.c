@@ -299,6 +299,22 @@ uint8_t set_nz(uint8_t val) { return P = P & 125 | val & 128 | !val * 2; }
 void init(char *fdd);
 int loop();
 
+void audio_callback(void* ud, uint8_t* stream, int len)
+{
+  static int8_t tmpbuf[4096];
+  //assert(len / 2 <= 4096);
+  apu_callback(&apu, (void *) tmpbuf, len);
+  bbk_lpc_callback(&bbk, (void *) stream, len);
+  int16_t *d1 = (int16_t *) tmpbuf;
+  int16_t *d2 = (int16_t *) stream;
+  for (int i = 0; i < len / 2; i++) {
+    int res = d2[i] + d1[i];
+    if (res > 32767) res = 32767;
+    if (res < -32768) res = -32768;
+    d2[i] = res;
+  }
+}
+
 #ifdef __wasm__
 #include <string.h>
 #include <stdio.h>
@@ -335,7 +351,7 @@ int wasm_getaudiolen()
 
 double *wasm_getaudio()
 {
-  apu_callback(&apu, (void *) buf, SAMPLE_NUM * 2);
+  audio_callback(NULL, (void *) buf, SAMPLE_NUM * 2);
   for (int i = 0; i < SAMPLE_NUM; i++) {
     audiobuf[i] = buf[i] / 32768.0f;
   }
@@ -362,8 +378,8 @@ int main(int argc, char **argv) {
   aspec.format = AUDIO_S16SYS;
   aspec.channels = 1;
   aspec.samples = 2048;
-  aspec.callback = apu_callback;
-  aspec.userdata = &apu;
+  aspec.callback = audio_callback;
+  aspec.userdata = NULL;
   SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &aspec, NULL, 0);
   if (dev == 0) {
     printf("Failed to open audio: %s\n", SDL_GetError());
@@ -701,6 +717,8 @@ int loop() {
     }
     }
   }
+
+  bbk_run(&bbk);
 
   // Update PPU, which runs 3 times faster than CPU. Each CPU instruction
   // takes at least 2 cycles.

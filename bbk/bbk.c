@@ -3,11 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 
 void Joy_Reset();
 void Joy_Write4016(unsigned char data);
 unsigned char Joy_Read4016(void);
 unsigned char Joy_Read4017(void);
+#include "LPC_D6_SYNTH.H"
+
 extern uint8_t mirror;
 
 /*
@@ -294,9 +297,27 @@ uint8_t bbk_mem(BBK *bbk, uint16_t addr, uint8_t val, uint8_t write)
 		}
 		break;
 	case 0xff10: // SoundPort0/SpeakInitPort
+		if (write) {
+			if (bbk->reg_spint == 0 && (val & 1)) {
+				lpc_d6_synth_reset(bbk->lpc.lpc);
+			}
+			bbk->reg_spint = val & 1;
+		}
 		break;
 	case 0xff18: // SoundPort1/SpeakDataPort
-		return 0x8f;
+		if (write) {
+			if (((bbk->lpc.wpos + 1) & (SP_BUF_SIZE - 1)) !=
+			    bbk->lpc.rpos) {
+				bbk->lpc.data[bbk->lpc.wpos++] = val;
+				bbk->lpc.wpos &= SP_BUF_SIZE - 1;
+			}
+		} else {
+			if (((bbk->lpc.wpos + 1) & (SP_BUF_SIZE - 1)) ==
+			    bbk->lpc.rpos)
+				return 0; // buffer full, busy
+			else
+				return 0x8f; // idle
+		}
 		break;
 	case 0xff40: // PCC port
 	case 0xff48:
@@ -356,6 +377,68 @@ void bbk_hsync(BBK *bbk, int line)
 	}
 }
 
+void bbk_run(BBK *bbk)
+{
+	int pcm_ok = atomic_load_explicit(&(bbk->lpc.pcm_ok),
+					  memory_order_acquire);
+	if (!pcm_ok) {
+		int eos = 0;
+		bool ok = true;
+		while (ok && bbk->lpc.pcm_size < 3000) {
+			int new_size;
+			ok = lpc_d6_synth_do(bbk->lpc.lpc,
+					     bbk->lpc.pcm + bbk->lpc.pcm_size,
+					     &new_size, NULL, &eos);
+			if (ok) bbk->lpc.pcm_size += new_size;
+		}
+		if (eos || bbk->lpc.pcm_size >= 2048) {
+			bbk->lpc.eos = eos;
+			atomic_store_explicit(&(bbk->lpc.pcm_ok), 1,
+					      memory_order_release);
+		}
+	}
+}
+
+void bbk_lpc_callback(void* ud, uint8_t* stream, int len)
+{
+	BBK *bbk = ud;
+	int16_t *buffer = (int16_t *)stream;
+	int count = len / 2;
+
+	for (int i = 0; i < count; i++) {
+		buffer[i] = 0;
+	}
+
+	int pcm_ok = atomic_load_explicit(&(bbk->lpc.pcm_ok),
+					  memory_order_acquire);
+	if (pcm_ok) {
+		if (bbk->lpc.pcm_size < count) {
+			memcpy(buffer, bbk->lpc.pcm, bbk->lpc.pcm_size * 2);
+			bbk->lpc.pcm_size = 0;
+			bbk->lpc.eos = 0;
+			atomic_store_explicit(&(bbk->lpc.pcm_ok), 0,
+					      memory_order_release);
+		} else {
+			memcpy(buffer, bbk->lpc.pcm, count);
+			bbk->lpc.pcm_size -= count;
+			bbk->lpc.eos = 0;
+			memmove(bbk->lpc.pcm, bbk->lpc.pcm + count, bbk->lpc.pcm_size * 2);
+			atomic_store_explicit(&(bbk->lpc.pcm_ok), 0,
+					      memory_order_release);
+		}
+	}
+}
+
+static int feed(void *host, uint8_t *food)
+{
+	BBK *bbk = host;
+	if (bbk->lpc.rpos == bbk->lpc.wpos)
+		return LPC_CMD_NONE;
+	*food = bbk->lpc.data[bbk->lpc.rpos++];
+	bbk->lpc.rpos &= SP_BUF_SIZE - 1;
+	return LPC_CMD_PAYLOAD;
+}
+
 void bbk_reset(BBK *bbk, uint8_t *bios, char *fdd)
 {
 	memset(bbk, 0, sizeof(BBK));
@@ -367,6 +450,7 @@ void bbk_reset(BBK *bbk, uint8_t *bios, char *fdd)
 	bbk->reg_ff1c = 1;
 	bbk->reg_ff24 = 0;
 	bbk->reg_ff2c = 0;
+	bbk->reg_spint = 0;
 
 	bbk->b_splitmode = 0;
 	bbk->b_enable_irq = 0;
@@ -384,4 +468,9 @@ void bbk_reset(BBK *bbk, uint8_t *bios, char *fdd)
 	FdcLoadDiskImage(&(bbk->fdc), fdd);
 	Joy_Reset();
 	mirror = 2;
+
+	bbk->lpc.rpos = 0;
+	bbk->lpc.wpos = 0;
+	bbk->lpc.pcm_ok = 0;
+	bbk->lpc.lpc = lpc_d6_synth_new(feed, bbk, LPC_STD_VARIANT_BBK);
 }

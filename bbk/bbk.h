@@ -16,6 +16,7 @@ typedef struct {
 	uint8_t reg_ff1c;
 	uint8_t reg_ff24;
 	uint8_t reg_ff2c;
+	uint8_t reg_spint;
 
 	// holtek
 	uint8_t b_splitmode;
@@ -27,6 +28,20 @@ typedef struct {
 	uint8_t queue_vr[32];
 	int qindex;
 
+	// lpc
+	struct {
+		void *lpc;
+#define SP_BUF_SIZE 16
+		uint8_t data[SP_BUF_SIZE];
+		int rpos;
+		int wpos;
+
+		_Atomic int pcm_ok;
+		int pcm_size;
+		int eos;
+		int16_t pcm[4096];
+	} lpc;
+
 	uint8_t *bios;
 	FDC fdc;
 	int irq;
@@ -37,5 +52,7 @@ uint8_t bbk_memlow(BBK *bbk, uint16_t addr, uint8_t val, uint8_t write);
 uint8_t bbk_mem(BBK *bbk, uint16_t addr, uint8_t val, uint8_t write);
 uint8_t *map_chraddr(BBK *bbk, uint16_t addr);
 void bbk_hsync(BBK *bbk, int line);
+void bbk_run(BBK *bbk);
+void bbk_lpc_callback(void* ud, uint8_t* stream, int len);
 
 #endif /* BBK_H */
