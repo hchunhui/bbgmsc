@@ -70,6 +70,7 @@ int shift_at = 0;
 int mapper;
 BBK bbk;
 APU apu;
+uint8_t apu_irq;
 
 // Read a byte from CHR ROM or CHR RAM.
 uint8_t *get_chr_byte(uint16_t a) {
@@ -150,6 +151,12 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
     if (write && lo == 20) { // $4014 OAM DMA
       for (uint16_t i = 256; i--;)
         oam[i] = mem(i, val, 0, 0);
+      return 0;
+    }
+
+    if (addr == 0x4017 && write) {
+      if (val == 0) apu_irq = 1;
+      else apu_irq = 0;
       return 0;
     }
 
@@ -853,6 +860,8 @@ int loop() {
       scany %= 262;
       if (scany == 0) {
         ret = 2;
+        if (apu_irq && !nmi_irq)
+          nmi_irq = 1;
       }
     }
   }

@@ -4,6 +4,7 @@
 #include "apu.h"
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 static void update_pulse(Pulse *p, int16_t *buffer, int count)
 {
@@ -19,7 +20,7 @@ static void update_pulse(Pulse *p, int16_t *buffer, int count)
 		}
 
 		p->freq *= p->sweep;
-		if (p->freq > 10000) p->freq = 0;
+		if (!isfinite(p->freq)) p->freq = 0;
 		p->volume -= p->decay * dt;
 		p->phase += p->freq * dt;
 		if (p->length_en) p->length--;
@@ -259,6 +260,14 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 			apu->pulse2.active = !!(val & 2);
 			apu->triangle.active = !!(val & 4);
 			apu->noise.active = !!(val & 8);
+			if (!apu->pulse1.active)
+				apu->pulse1.length = 0;
+			if (!apu->pulse2.active)
+				apu->pulse2.length = 0;
+			if (!apu->triangle.active)
+				apu->triangle.length = 0;
+			if (!apu->noise.active)
+				apu->noise.length = 0;
 		} else {
 			uint8_t out = 0;
 			if (apu->pulse1.active) out |= 1;
