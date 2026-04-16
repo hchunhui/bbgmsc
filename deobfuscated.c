@@ -65,7 +65,7 @@ uint16_t scany,          // Scanline Y
     frame_buffer[61440]; // 256x240 pixel frame buffer. Top and bottom 8 rows
                          // are not drawn.
 
-int shift_at = 0;
+unsigned int shift_at = 0;
 
 int mapper;
 BBK bbk;
@@ -718,7 +718,8 @@ int loop() {
     }
   }
 
-  bbk_run(&bbk);
+  if (mapper == 171)
+    bbk_run(&bbk);
 
   // Update PPU, which runs 3 times faster than CPU. Each CPU instruction
   // takes at least 2 cycles.
@@ -789,7 +790,7 @@ int loop() {
                     1429,  1550,  20075, 36358, 52713, 16904, 0,     0,
                     ~0,    ~328,  ~422,  ~452,  ~482,  58911, 50814, 42620,
                     40667, 40729, 48951, 53078, 61238, 44405}
-                    [palette_ram[color ? palette | color : 0]];
+                    [palette_ram[color ? palette | color : 0] & 63];
           }
 
           // Update shift registers every cycle.

@@ -20,7 +20,7 @@ static void update_pulse(Pulse *p, int16_t *buffer, int count)
 		}
 
 		p->freq *= p->sweep;
-		if (!isfinite(p->freq)) p->freq = 0;
+		if (!isfinite(p->freq) || p->freq > 20000) p->freq = 0;
 		p->volume -= p->decay * dt;
 		p->phase += p->freq * dt;
 		if (p->length_en) p->length--;
