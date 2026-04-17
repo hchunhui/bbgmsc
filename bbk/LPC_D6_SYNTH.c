@@ -215,12 +215,14 @@ static unsigned char byte_rev(unsigned char a)
 }
 
 // ref: https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html
-#define crBegin static int __state=0; switch(__state) { case 0:
+#define crBegin static int __state=0; if (__reset) { __state = 0; return 0; } switch(__state) { case 0:
 #define crReturn(x) do { __state=__LINE__; return x; \
 			case __LINE__:; } while (0)
 #define crFinish }
 #define TRY(f) while(!(f)) crReturn(false)
 #define RETURN(x) do { *__res = (x); __state = 0; return true; } while (0)
+
+static bool __reset;
 
 // bits <= 8
 static bool get_nbits(LPC_SYNTH* s, short bits, int *__res)
@@ -719,6 +721,13 @@ int lpc_d6_synth_reset(void* lpc)
 	s->variant = variant;
 
 	s->state = LPC_STATE_STARTUP;
+
+	__reset = true;
+	lpc_get_frame(NULL, NULL, NULL, NULL);
+	lpc_synth_preload(NULL, NULL);
+	lpc_synth_run(NULL, NULL, NULL, NULL);
+	lpc_d6_synth_do(NULL, NULL, NULL, NULL, NULL);
+	__reset = false;
 
 	return 0;
 }
