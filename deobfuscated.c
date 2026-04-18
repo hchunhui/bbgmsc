@@ -839,11 +839,11 @@ int loop() {
       }
 
       // Check for MMC3 IRQ.
-      if ((scany + 1) % 262 < 241 && dot == 261 && mmc3_irq && !mmc3_latch--)
+      if ((scany + 1) % 312 < 241 && dot == 261 && mmc3_irq && !mmc3_latch--)
         nmi_irq = 1;
 
       // Reset vertical VRAM address to T value.
-      if (scany == 261 && dot - 280 < 25u)  // dot [280..304]
+      if (scany == 311 && dot - 280 < 25u)  // dot [280..304]
         V = V & 0x841f | T & 0x7be0;
 
       // XXX: doesn't work well
@@ -857,8 +857,8 @@ int loop() {
       }
     }
 
-    if (dot == 1) {
-      if (scany == 241) {
+    if (dot == 260) {
+      if (scany == 291) {
         // If NMI is enabled, trigger NMI.
         if (ppuctrl & 128)
           nmi_irq = 4;
@@ -867,16 +867,16 @@ int loop() {
       }
 
       // Clear ppustatus.
-      if (mapper != 171 && scany == 261)
+      if (mapper != 171 && scany == 311)
         ppustatus = 0;
     }
 
-    // Increment to next dot/scany. 341 dots per scanline, 262 scanlines per
-    // frame. Scanline 261 is represented as -1.
+    // Increment to next dot/scany. 341 dots per scanline, 312 scanlines per
+    // frame.
     if (++dot == 341) {
       dot = 0;
       scany++;
-      scany %= 262;
+      scany %= 312;
       if (scany == 0) {
         ret = 2;
         if (apu_irq && !nmi_irq)
