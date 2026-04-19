@@ -132,7 +132,7 @@ uint8_t bbk_memlow(BBK *bbk, uint16_t addr, uint8_t val, uint8_t write)
 			return Joy_Read4017();
 		}
 		break;
-	default:
+	default:;
 //		printf("lowaddr %04x val %02x write %d\n",
 //		       addr, val, write);
 	}
@@ -324,7 +324,7 @@ uint8_t bbk_mem(BBK *bbk, uint16_t addr, uint8_t val, uint8_t write)
 	case 0xff50:
 		return 0;
 		break;
-	default:
+	default:;
 //		printf("addr %04x val %02x write %d\n",
 //		       addr, val, write);
 	}
@@ -384,7 +384,7 @@ void bbk_run(BBK *bbk)
 	if (!pcm_ok) {
 		int eos = 0;
 		bool ok = true;
-		while (ok && bbk->lpc.pcm_size < 3000) {
+		while (ok && bbk->lpc.pcm_size < 2100) {
 			int new_size;
 			ok = lpc_d6_synth_do(bbk->lpc.lpc,
 					     bbk->lpc.pcm + bbk->lpc.pcm_size,
@@ -392,7 +392,6 @@ void bbk_run(BBK *bbk)
 			if (ok) bbk->lpc.pcm_size += new_size;
 		}
 		if (eos || bbk->lpc.pcm_size >= 2048) {
-			bbk->lpc.eos = eos;
 			atomic_store_explicit(&(bbk->lpc.pcm_ok), 1,
 					      memory_order_release);
 		}
@@ -415,17 +414,13 @@ void bbk_lpc_callback(void* ud, uint8_t* stream, int len)
 		if (bbk->lpc.pcm_size < count) {
 			memcpy(buffer, bbk->lpc.pcm, bbk->lpc.pcm_size * 2);
 			bbk->lpc.pcm_size = 0;
-			bbk->lpc.eos = 0;
-			atomic_store_explicit(&(bbk->lpc.pcm_ok), 0,
-					      memory_order_release);
 		} else {
 			memcpy(buffer, bbk->lpc.pcm, count);
 			bbk->lpc.pcm_size -= count;
-			bbk->lpc.eos = 0;
 			memmove(bbk->lpc.pcm, bbk->lpc.pcm + count, bbk->lpc.pcm_size * 2);
-			atomic_store_explicit(&(bbk->lpc.pcm_ok), 0,
-					      memory_order_release);
 		}
+		atomic_store_explicit(&(bbk->lpc.pcm_ok), 0,
+				      memory_order_release);
 	}
 }
 
@@ -472,5 +467,6 @@ void bbk_reset(BBK *bbk, uint8_t *bios, char *fdd)
 	bbk->lpc.rpos = 0;
 	bbk->lpc.wpos = 0;
 	bbk->lpc.pcm_ok = 0;
+	bbk->lpc.pcm_size = 0;
 	bbk->lpc.lpc = lpc_d6_synth_new(feed, bbk, LPC_STD_VARIANT_BBK);
 }

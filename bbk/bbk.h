@@ -31,15 +31,14 @@ typedef struct {
 	// lpc
 	struct {
 		void *lpc;
-#define SP_BUF_SIZE 16
+#define SP_BUF_SIZE 64
 		uint8_t data[SP_BUF_SIZE];
 		int rpos;
 		int wpos;
 
 		_Atomic int pcm_ok;
 		int pcm_size;
-		int eos;
-		int16_t pcm[4096];
+		int16_t pcm[3000];
 	} lpc;
 
 	uint8_t *bios;

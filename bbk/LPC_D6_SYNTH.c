@@ -16,16 +16,16 @@
 #define mymalloc(a, b) malloc(b)
 #define myfree(a, b) free(b)
 
-#define LPC_UPSAMPLE // to 48K
+#define LPC_UPSAMPLE // to 44K
 
 #define LPC_ORDER 10
 #define LPC_SAMPLES_PER_FRAME 200 // 20ms per frame
 
 #define LPC_FRAC_BITS 15 // using Q15
 
-// 10K * 24/5 = 48K
+// 10K * 22/5 = 44K
 #define LPC_SRC_STEP 5
-#define LPC_SRC_DENOMINATOR 24
+#define LPC_SRC_DENOMINATOR 22
 
 typedef struct tag_lpc_frame {
 	short energy;
@@ -72,7 +72,7 @@ typedef struct tag_lpc_synth {
 
 //------------------------------------------------------------------------------
 
-#pragma warning (disable:4305)
+//#pragma warning (disable:4305)
 
 static const short lpc_gain_tab[] =
 {
@@ -218,7 +218,7 @@ static unsigned char byte_rev(unsigned char a)
 #define crBegin static int __state=0; if (__reset) { __state = 0; return 0; } switch(__state) { case 0:
 #define crReturn(x) do { __state=__LINE__; return x; \
 			case __LINE__:; } while (0)
-#define crFinish }
+#define crFinish } return false
 #define TRY(f) while(!(f)) crReturn(false)
 #define RETURN(x) do { *__res = (x); __state = 0; return true; } while (0)
 

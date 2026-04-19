@@ -118,6 +118,12 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
     if (write)
       switch (lo) {
       case 0: // $2000 ppuctrl
+        // hacky, but it fixes screen glitching when playing LPC audio...
+        if ((val & 128) ^ (ppuctrl & 128)) {
+          val = ppuctrl ^ 128;
+          if ((val & 128) && scany > 291)
+            nmi_irq = 4;
+        }
         ppuctrl = val;
         T = T & 0xf3ff | val % 4 << 10;
         break;
@@ -308,7 +314,7 @@ void audio_callback(void* ud, uint8_t* stream, int len)
   int16_t *d1 = (int16_t *) tmpbuf;
   int16_t *d2 = (int16_t *) stream;
   for (int i = 0; i < len / 2; i++) {
-    int res = d2[i] + d1[i];
+    int res = d2[i] * 2 + d1[i];
     if (res > 32767) res = 32767;
     if (res < -32768) res = -32768;
     d2[i] = res;
@@ -447,7 +453,9 @@ int loop() {
   int ret = 0;
   static int tmp2;
   cycles = nomem = 0;
-  if (nmi_irq)
+  if (nmi_irq == 4)
+    goto nmi_irq;
+  if (nmi_irq == 1 && !(P & 32))
     goto nmi_irq;
 
   opcode = read_pc();

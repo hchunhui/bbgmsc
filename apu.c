@@ -260,14 +260,22 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 			apu->pulse2.active = !!(val & 2);
 			apu->triangle.active = !!(val & 4);
 			apu->noise.active = !!(val & 8);
-			if (!apu->pulse1.active)
+			if (!apu->pulse1.active) {
+				apu->pulse1.length_en = 1;
 				apu->pulse1.length = 0;
-			if (!apu->pulse2.active)
+			}
+			if (!apu->pulse2.active) {
+				apu->pulse2.length_en = 1;
 				apu->pulse2.length = 0;
-			if (!apu->triangle.active)
+			}
+			if (!apu->triangle.active) {
+				apu->triangle.length_en = 1;
 				apu->triangle.length = 0;
-			if (!apu->noise.active)
+			}
+			if (!apu->noise.active) {
+				apu->noise.length_en = 1;
 				apu->noise.length = 0;
+			}
 		} else {
 			uint8_t out = 0;
 			if (apu->pulse1.active) out |= 1;
