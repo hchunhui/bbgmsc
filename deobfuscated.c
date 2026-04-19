@@ -154,7 +154,7 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
     break;
 
   case 4:
-    if (write && lo == 20) { // $4014 OAM DMA
+    if (write && addr == 0x4014) { // $4014 OAM DMA
       for (uint16_t i = 256; i--;)
         oam[i] = mem(i, val, 0, 0);
       return 0;
@@ -186,7 +186,7 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
                           SDL_SCANCODE_LEFT,   // Dpad Left
                           SDL_SCANCODE_RIGHT,  // Dpad Right
                       }[hi]];
-    if (lo == 22) {
+    if (addr == 0x4016) {
       if (write) {
         keys = tmp;
       } else {
