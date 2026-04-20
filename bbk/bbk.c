@@ -415,7 +415,7 @@ void bbk_lpc_callback(void* ud, uint8_t* stream, int len)
 			memcpy(buffer, bbk->lpc.pcm, bbk->lpc.pcm_size * 2);
 			bbk->lpc.pcm_size = 0;
 		} else {
-			memcpy(buffer, bbk->lpc.pcm, count);
+			memcpy(buffer, bbk->lpc.pcm, count * 2);
 			bbk->lpc.pcm_size -= count;
 			memmove(bbk->lpc.pcm, bbk->lpc.pcm + count, bbk->lpc.pcm_size * 2);
 		}
