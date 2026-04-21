@@ -57,6 +57,7 @@ uint8_t *rom, *chrrom,                // Points to the start of PRG/CHR ROM
 
 uint16_t scany,          // Scanline Y
     T, V,                // "Loopy" PPU registers
+    TT, VV,
     sum,                 // Sum used for ADC/SBC
     dot,                 // Horizontal position of PPU, from 0..340
     atb,                 // Attribute byte
@@ -104,14 +105,14 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
       tmp = ppubuf;
       uint8_t *rom =
           // Access CHR ROM or CHR RAM
-          V < 8192 ? write && chrrom != chrram ? &tmp : get_chr_byte(V)
+          VV < 8192 ? write && chrrom != chrram ? &tmp : get_chr_byte(VV)
           // Access nametable RAM
-          : V < 16128 ? get_nametable_byte(V)
+          : VV < 16128 ? get_nametable_byte(VV)
                       // Access palette RAM
-                      : palette_ram + (uint8_t)((V & 19) == 16 ? V ^ 16 : V);
+                      : palette_ram + (uint8_t)((VV & 19) == 16 ? VV ^ 16 : VV);
       write ? *rom = val : (ppubuf = *rom);
-      V += ppuctrl & 4 ? 32 : 1;
-      V %= 16384;
+      VV += ppuctrl & 4 ? 32 : 1;
+      VV %= 16384;
       return tmp;
     }
 
@@ -119,29 +120,33 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
       switch (lo) {
       case 0: // $2000 ppuctrl
         // hacky, but it fixes screen glitching when playing LPC audio...
-        if ((val & 128) ^ (ppuctrl & 128)) {
-          val = ppuctrl ^ 128;
-          if ((val & 128) && scany > 291)
-            nmi_irq = 4;
+        if ((val & 128) && !(ppuctrl & 128) && scany > 291) {
+          nmi_irq = 4;
         }
         ppuctrl = val;
+        // hack
+        if (mapper == 171 && val & 128) mem(0, 0x60, val, 1);
         T = T & 0xf3ff | val % 4 << 10;
         break;
 
       case 1: // $2001 ppumask
         ppumask = val;
+        // hack
+        if (mapper == 171 && val) mem(1, 0x60, val, 1);
         break;
 
       case 5: // $2005 ppuscroll
-        T = (W ^= 1)
-          ? fine_x = val & 7, T & ~31 | val / 8
-          : T & 0x8c1f | val % 8 << 12 | val * 4 & 0x3e0;
+        TT = (W ^= 1)
+          ? fine_x = val & 7, TT & ~31 | val / 8
+          : TT & 0x8c1f | val % 8 << 12 | val * 4 & 0x3e0;
+        if (W == 0) T = TT;
         break;
 
       case 6: // $2006 ppuaddr
-        T = (W ^= 1)
-          ? T & 0xff | val % 64 << 8
-          : (V = T & ~0xff | val);
+        TT = (W ^= 1)
+          ? TT & 0xff | val % 64 << 8
+          : (VV = TT & ~0xff | val);
+        if (W == 0) T = TT;
       }
 
     if (lo == 2) { // $2002 ppustatus
@@ -851,8 +856,10 @@ int loop() {
         nmi_irq = 1;
 
       // Reset vertical VRAM address to T value.
-      if (scany == 311 && dot - 280 < 25u)  // dot [280..304]
+      if (scany == 311 && dot - 280 < 25u) { // dot [280..304]
         V = V & 0x841f | T & 0x7be0;
+        VV = V;
+      }
 
       // XXX: doesn't work well
       if (mapper == 171) {
