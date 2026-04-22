@@ -137,21 +137,25 @@ uint8_t mem(uint8_t lo, uint8_t hi, uint8_t val, uint8_t write) {
 
       case 5: // $2005 ppuscroll
         TT = (W ^= 1)
-          ? fine_x = val & 7, TT & ~31 | val / 8
+          ? fine_x = val & 7, T & ~31 | val / 8
           : TT & 0x8c1f | val % 8 << 12 | val * 4 & 0x3e0;
         if (W == 0) T = TT;
         break;
 
       case 6: // $2006 ppuaddr
         TT = (W ^= 1)
-          ? TT & 0xff | val % 64 << 8
+          ? T & 0xff | val % 64 << 8
           : (VV = TT & ~0xff | val);
         if (W == 0) T = TT;
       }
 
     if (lo == 2) { // $2002 ppustatus
       tmp = ppustatus & 0xe0;
-      ppustatus &= 0x7f;
+      static unsigned int c;
+      if (++c == 3) {
+        ppustatus &= 0x7f;
+        c = 0;
+      }
       W = 0;
       return tmp;
     }
