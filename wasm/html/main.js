@@ -228,6 +228,10 @@ function register_kbdmouse(ptr)
             screen.style.cursor = 'default';
         } else {
             screen.requestPointerLock();
+            if ('keyboard' in navigator &&
+                typeof navigator.keyboard.lock === 'function') {
+                navigator.keyboard.lock();
+            }
         }
     });
 }
@@ -297,29 +301,20 @@ function start()
                 screen.focus();
 
                 // web audio
-                const audctx = new window.AudioContext;
+                const audctx = new window.AudioContext({sampleRate: 44100});
                 const audlen = instance.exports.wasm_getaudiolen();
-                const mf64 = new Float64Array(instance.exports.memory.buffer);
-
-                const n = 1;
-                const dummybuf = audctx.createBuffer(1, audlen * n, 44100);
+                const dummybuf = audctx.createBuffer(1, audlen, 44100);
                 const dummysrc = audctx.createBufferSource();
 
-                const audcb = audctx.createScriptProcessor(audlen * n, 1, 1);
+                const audcb = audctx.createScriptProcessor(audlen, 1, 1);
                 audcb.addEventListener(
                     "audioprocess",
                     (ev) => {
                         const out = ev.outputBuffer;
-                        for (let j = 0; j < n; j++) {
-                            const ap = instance.exports.wasm_getaudio() / 8;
-                            for (let ch = 0; ch < 1; ch++) {
-                                const buf = out.getChannelData(ch);
-                                const off = audlen * ch;
-                                for (let i = 0; i < audlen; i++) {
-                                    buf[audlen * j + i] = mf64[ap + off + i];
-                                }
-                            }
-                        }
+                        const ap = instance.exports.wasm_getaudio();
+                        const mf32 = new Float32Array(
+                            instance.exports.memory.buffer, ap, audlen);
+                        out.copyToChannel(mf32, 0);
                     });
                 audcb.connect(audctx.destination);
 

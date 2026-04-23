@@ -357,14 +357,14 @@ void loop_many() {
 }
 
 #define SAMPLE_NUM 2048
-static double audiobuf[SAMPLE_NUM];
+static float audiobuf[SAMPLE_NUM];
 static int16_t buf[SAMPLE_NUM];
 int wasm_getaudiolen()
 {
   return SAMPLE_NUM;
 }
 
-double *wasm_getaudio()
+float *wasm_getaudio()
 {
   audio_callback(NULL, (void *) buf, SAMPLE_NUM * 2);
   for (int i = 0; i < SAMPLE_NUM; i++) {
