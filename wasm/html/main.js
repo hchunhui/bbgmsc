@@ -1,6 +1,12 @@
 'use strict';
 
+function get_bbgmsc(screen) {
+
 let mem8;
+let logger = null;
+let running = false;
+let audctx;
+let keypress_ptr;
 
 function get_string(ptr)
 {
@@ -36,13 +42,8 @@ function __get_mticks()
 
 function dolog(s)
 {
-    const o = document.getElementById('logarea');
-    const len = o.value.length;
-    if (len > 40960)
-        o.value = o.value.substring(len - 40960, len) + s;
-    else
-        o.value += s;
-    o.scrollTop = o.scrollHeight;
+    if (logger !== null)
+        logger(s);
 }
 
 function __console_print(ptr)
@@ -114,7 +115,6 @@ function __close(fd)
 
 function drawfb(fbptr, width, height)
 {
-    const screen = document.getElementById('screen');
     const ctx = screen.getContext('2d');
 
     screen.width = width;
@@ -191,26 +191,8 @@ const codemap = {
     "AltRight": 230
 };
 
-function request_pointer_lock()
-{
-    const screen = document.getElementById('screen');
-    screen.tabIndex = 1;
-    screen.focus();
-    screen.requestPointerLock();
-}
-
-function request_fullscreen()
-{
-    const screen = document.getElementById('screen');
-    screen.tabIndex = 1;
-    screen.focus();
-    screen.requestFullscreen();
-    screen.style.cursor = 'none';
-}
-
 function register_kbdmouse(ptr)
 {
-    const screen = document.getElementById('screen');
     function kbdhandler(ev, keypress) {
         ev.preventDefault();
         const code = ev.code;
@@ -234,6 +216,8 @@ function register_kbdmouse(ptr)
             }
         }
     });
+
+    keypress_ptr = ptr;
 }
 
 const imports = {
@@ -275,9 +259,8 @@ function loads(files, i, cont) {
     }
 }
 
-function start()
+function start(diskfile)
 {
-    document.getElementById('startkey').disabled = true;
     fetch('smolnes.wasm', fetchopt)
         .then(response => response.arrayBuffer())
         .then(bytes => WebAssembly.compile(bytes))
@@ -286,7 +269,6 @@ function start()
             instance.exports.memory.grow(100); // 64K * 100
             mem8 = new Uint8Array(instance.exports.memory.buffer);
             const biosfile = 'bbk_bios10.nes';
-            const diskfile = document.getElementById('diskname').value;
             dolog('disk file ' + diskfile + '\n');
             loads([biosfile, diskfile], 0, () => {
                 const biosptr = copy_string(biosfile, instance.exports.malloc);
@@ -297,11 +279,10 @@ function start()
                 instance.exports.init(diskptr);
                 register_kbdmouse(key_state_ptr);
 
-                const screen = document.getElementById('screen');
                 screen.focus();
 
                 // web audio
-                const audctx = new window.AudioContext({sampleRate: 44100});
+                audctx = new window.AudioContext({sampleRate: 44100});
                 const audlen = instance.exports.wasm_getaudiolen();
                 const dummybuf = audctx.createBuffer(1, audlen, 44100);
                 const dummysrc = audctx.createBufferSource();
@@ -323,12 +304,28 @@ function start()
                 dummysrc.connect(audcb);
                 dummysrc.start();
 
+                running = true;
                 function main_loop() {
-                    setTimeout(main_loop, 20);
+                    if (running)
+                        setTimeout(main_loop, 20);
                     instance.exports.loop_many();
                     drawfb(fb_ptr, 256, 240);
                 }
                 main_loop();
             });
         });
+}
+
+function stop()
+{
+    audctx.close();
+    running = false;
+}
+
+return {
+    start,
+    stop,
+    set_logger: function (o) { logger = o; },
+    set_keypress: function (key, down) { mem8[keypress_ptr + key] = down; },
+};
 }
