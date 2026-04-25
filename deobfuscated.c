@@ -340,6 +340,7 @@ void set_rom(char *name) {
   rewind(fp);
   fread(rombuf, 1, size, fp);
   fclose(fp);
+  apu_reset(&apu);
 }
 
 void *get_frame_buffer() {
