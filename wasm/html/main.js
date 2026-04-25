@@ -7,6 +7,7 @@ let logger = null;
 let running = false;
 let audctx;
 let keypress_ptr;
+let offscreen;
 
 function get_string(ptr)
 {
@@ -113,16 +114,12 @@ function __close(fd)
     delete fdtable[fd];
 }
 
-function drawfb(fbptr, width, height)
+function drawfb(fbptr)
 {
-    const ctx = screen.getContext('2d');
+    const ctx = offscreen.getContext('2d');
+    const data = ctx.createImageData(offscreen.width, offscreen.height);
 
-    screen.width = width;
-    screen.height = height;
-
-    const data = ctx.createImageData(screen.width, screen.height);
-
-    const len = screen.width * screen.height;
+    const len = offscreen.width * offscreen.height;
     for (let i = 0; i < len; i++) {
         const rgb565 = mem8[fbptr + 2 * i] | (mem8[fbptr + 2 * i + 1] << 8);
         data.data[4 * i + 0] = (rgb565 & 0x1f) << 3;
@@ -131,6 +128,11 @@ function drawfb(fbptr, width, height)
         data.data[4 * i + 3] = 255;
     }
     ctx.putImageData(data, 0, 0);
+
+    const mctx = screen.getContext('2d');
+    mctx.drawImage(offscreen,
+                   0, 0, offscreen.width, offscreen.height,
+                   0, 0, screen.width, screen.height);
 }
 
 const codemap = {
@@ -279,6 +281,10 @@ function start(diskfile)
                 instance.exports.init(diskptr);
                 register_kbdmouse(key_state_ptr);
 
+                offscreen = document.createElement('canvas');
+                offscreen.width = 256;
+                offscreen.height = 240;
+
                 screen.focus();
 
                 // web audio
@@ -288,13 +294,18 @@ function start(diskfile)
                 const dummysrc = audctx.createBufferSource();
 
                 const audcb = audctx.createScriptProcessor(audlen, 1, 1);
+                let mf32;
+                let ap;
                 audcb.addEventListener(
                     "audioprocess",
                     (ev) => {
                         const out = ev.outputBuffer;
-                        const ap = instance.exports.wasm_getaudio();
-                        const mf32 = new Float32Array(
-                            instance.exports.memory.buffer, ap, audlen);
+                        const ap1 = instance.exports.wasm_getaudio();
+                        if (ap1 !== ap) {
+                            ap = ap1;
+                            mf32 = new Float32Array(
+                                instance.exports.memory.buffer, ap, audlen);
+                        }
                         out.copyToChannel(mf32, 0);
                     });
                 audcb.connect(audctx.destination);
@@ -309,7 +320,7 @@ function start(diskfile)
                     if (running)
                         setTimeout(main_loop, 20);
                     instance.exports.loop_many();
-                    drawfb(fb_ptr, 256, 240);
+                    drawfb(fb_ptr);
                 }
                 main_loop();
             });
