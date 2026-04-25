@@ -494,7 +494,7 @@ static short random_gen(LPC_SYNTH* s)
 
 	r = 0;
 
-	seed = s->random_seed << 1;
+	seed = (short) ((unsigned short) s->random_seed << 1);
 
 	r = ((seed >> 12) ^ (seed >> 13)) & 1;
 
@@ -535,7 +535,7 @@ static bool lpc_synth_run(LPC_SYNTH* s, short* pcm_out, int* eos, short **__res)
 				// silent
 				excit = 0;
 			}
-		} else if (s->curr_pitch >= 160) {
+		} else if (s->curr_pitch >= 160 || s->curr_pitch < 0) {
 			excit = 0;
 		} else {
 			// lpc voiced excit

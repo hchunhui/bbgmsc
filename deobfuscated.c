@@ -406,6 +406,7 @@ int main(int argc, char **argv) {
   const int TARGET_FPS = 50;
   const int FRAME_DELAY = 1000 / TARGET_FPS;
   Uint32 frame_start = SDL_GetTicks();
+  int t;
   while (1) {
     switch (loop()) {
     case 1:
@@ -420,7 +421,7 @@ int main(int argc, char **argv) {
           return 0;
       break;
     case 2:
-      int t = SDL_GetTicks() - frame_start;
+      t = SDL_GetTicks() - frame_start;
       if (FRAME_DELAY > t) {
         SDL_Delay(FRAME_DELAY - t);
       }

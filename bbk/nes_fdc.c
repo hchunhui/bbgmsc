@@ -309,7 +309,6 @@ void FdcWrite(FDC* thiz, unsigned char nPort, unsigned nData)
 			break;
 		case 3: // 3F3: FDCIRQPortI/FDCDMADackIO
 			// I: D6 : IRQ
-			nData = nData;
 			break;
 		case 4: // 3F4: FDCResetPortO/FDCStatPortI
 			// O: D6 : FDC pin reset
@@ -385,7 +384,6 @@ void FdcWrite(FDC* thiz, unsigned char nPort, unsigned nData)
 			// O: D[1:0] : 00 500kbps(1.2M, 1.44M)
 			//             01 300kbps(360K)
 			//             10 250kbps(720K)
-			nData = nData;
 			break;
 		default:
 			break;
@@ -440,8 +438,6 @@ void FdcNop(FDC* thiz)
 //void FDC::FdcReadTrack(FDC* thiz)
 void FdcReadTrack(FDC* thiz)
 {
-	thiz = thiz;
-
 	thiz->bFdcPhase = (thiz->nFdcMainStatus & FDC_MS_EXECUTION) ?
 					  FDC_PH_EXECUTION : FDC_PH_RESULT;
 
