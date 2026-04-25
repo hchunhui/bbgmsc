@@ -28,7 +28,12 @@ typedef struct {
 } Triangle;
 
 typedef struct {
+	uint16_t shift_reg;
+	int mode;
+	int timer;
+	int period;
 	float volume;
+	float decay;
 	int length_en;
 	int length;
 	int active;

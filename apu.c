@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <math.h>
 
+// 1.789773 MHz for NTSC, 1.662607 MHz for PAL, and 1.773448 MHz for Dendy
+#define FCPU 1773448.0f
+
 static void update_pulse(Pulse *p, int16_t *buffer, int count)
 {
 	float dt = 1.0f / SAMPLING_RATE;
@@ -54,15 +57,29 @@ static void update_triangle(Triangle *t, int16_t *buffer, int count)
 
 static void update_noise(Noise *n, int16_t *buffer, int count)
 {
+	float dt = 1.0f / SAMPLING_RATE;
+	const int cycles_per_sample = FCPU / SAMPLING_RATE;
 	if (!n->active || n->volume <= 0)
 		return;
 
 	for (int i = 0; i < count; i++) {
 		if (!n->length_en || n->length > 0) {
-			buffer[i] += ((float) (rand() & 0xffff) / 0xffff - 0.5f) / 0.5f * n->volume * 0.3f * 32767;
+
+			for (int c = 0; c < cycles_per_sample; c++) {
+				if (--n->timer <= 0) {
+					n->timer = n->period;
+					uint8_t feedback = (n->shift_reg & 1) ^ ((n->shift_reg >> (n->mode ? 6 : 1)) & 1);
+					n->shift_reg = (n->shift_reg >> 1) | (feedback << 14);
+				}
+			}
+
+			float vol = n->volume;
+			if ((n->shift_reg & 1)) vol = 0.0f;
+			buffer[i] += vol * 0.3f * 32767;
 		}
 
 		if (n->length_en) n->length--;
+		n->volume -= n->decay * dt;
 	}
 }
 
@@ -84,13 +101,16 @@ void apu_callback(void* ud, uint8_t* stream, int len)
 void apu_reset(APU *apu)
 {
 	memset(apu, 0, sizeof(APU));
+	apu->noise.shift_reg = 1;
 }
 
-// 1.789773 MHz for NTSC, 1.662607 MHz for PAL, and 1.773448 MHz for Dendy
-#define FCPU 1773448.0f
 const static int llut[32] = {
 	10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60, 10, 14, 12, 26, 14,
 	12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30
+};
+
+const static int plut[] = {
+	4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
 };
 
 #if defined(__GNUC__) && !defined(__clang__)
@@ -238,7 +258,15 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 	case 0x400c:
 		if (write) {
 			int L = (val >> 5) & 1;
+			int C = (val >> 4) & 1;
 			int V = (val) & 0x0f;
+			if (C) {
+				noise->volume = V / 15.0f;
+				noise->decay = 0.0f;
+			} else {
+				noise->volume = 1.0f;
+				noise->decay = 1.0f / 15 * 240.0f / (V + 1);
+			}
 			noise->volume = V / 15.0f;
 			noise->length_en = !L;
 		}
@@ -246,7 +274,10 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 	case 0x400d:
 		break;
 	case 0x400e:
-		// TODO
+		if (write) {
+			noise->mode = (val >> 7) & 1;
+			noise->period = plut[val & 0xf];
+		}
 		break;
 	case 0x400f:
 		if (write) {
