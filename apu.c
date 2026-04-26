@@ -34,7 +34,7 @@ static void update_pulse(Pulse *p, int16_t *buffer, int count)
 static void update_triangle(Triangle *t, int16_t *buffer, int count)
 {
 	float dt = 1.0f / SAMPLING_RATE;
-	if (!t->active || t->volume <= 0 || t->freq < 20)
+	if (!t->active || t->volume <= 0 || t->freq < 20 || t->freq > 20000)
 		return;
 
 	for (int i = 0; i < count; i++) {
