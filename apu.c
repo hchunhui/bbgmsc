@@ -216,7 +216,8 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 	case 0x4006:
 		pulse = p[(addr >> 2) & 1];
 		if (write) {
-			pulse->timer = val;
+			pulse->timer = (pulse->timer & ~0xff) | val;
+			pulse->freq = FCPU / (16 * (pulse->timer + 1));
 		}
 		break;
 	case 0x4003:
@@ -225,7 +226,7 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 		if (write) {
 			int L = (val >> 3) & 0x1f;
 			int T = val & 7;
-			pulse->timer |= (T << 8);
+			pulse->timer = (pulse->timer & 0xff) | (T << 8);
 			pulse->freq = FCPU / (16 * (pulse->timer + 1));
 			pulse->length = llut[L] * SAMPLING_RATE / 120;
 		}
@@ -243,14 +244,15 @@ uint8_t apu_mem(APU *apu, uint16_t addr, uint8_t val, uint8_t write)
 		break;
 	case 0x400a:
 		if (write) {
-			triangle->timer = val;
+			triangle->timer = (triangle->timer & ~0xff) | val;
+			triangle->freq = FCPU / (32 * (triangle->timer + 1));
 		}
 		break;
 	case 0x400b:
 		if (write) {
 			int L = (val >> 3) & 0x1f;
 			int T = val & 7;
-			triangle->timer |= (T << 8);
+			triangle->timer = (triangle->timer & 0xff) | (T << 8);
 			triangle->freq = FCPU / (32 * (triangle->timer + 1));
 			triangle->length = llut[L] * SAMPLING_RATE / 120;
 		}
