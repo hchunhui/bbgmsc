@@ -383,7 +383,7 @@ int main(int argc, char **argv) {
   // top or bottom 8 rows. Scaling up by 4x gives 1024x960, but that looks
   // squished because the NES doesn't have square pixels. So shrink it by 7/8.
   void *renderer = SDL_CreateRenderer(
-      SDL_CreateWindow("smolnes", 0, 0, 1024, 960, SDL_WINDOW_SHOWN), -1,
+      SDL_CreateWindow("smolnes", 0, 0, 512, 480, SDL_WINDOW_SHOWN), -1,
       0);
   void *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565,
                                     SDL_TEXTUREACCESS_STREAMING, 256, 240);
@@ -801,15 +801,15 @@ int loop() {
             // size.
             frame_buffer[scany * 256 + dot] =
                 (uint16_t[64]){
-                    25356, 34816, 39011, 30854, 24714, 4107,  106,   2311,
-                    2468,  2561,  4642,  6592,  20832, 0,     0,     0,
-                    44373, 49761, 55593, 51341, 43186, 18675, 434,   654,
-                    4939,  5058,  3074,  19362, 37667, 0,     0,     0,
-                    ~0,    ~819,  64497, 64342, 62331, 43932, 23612, 9465,
-                    1429,  1550,  20075, 36358, 52713, 16904, 0,     0,
-                    ~0,    ~328,  ~422,  ~452,  ~482,  58911, 50814, 42620,
-                    40667, 40729, 48951, 53078, 61238, 44405}
-                    [palette_ram[color ? palette | color : 0] & 63];
+                    0x7BEF, 0xB004, 0xB805, 0xA08C, 0x7913, 0x3096, 0x0194, 0x020F,
+                    0x02C9, 0x0347, 0x0367, 0x4306, 0x8286, 0x0000, 0x0000, 0x0000,
+                    0xBDF7, 0xFB08, 0xFA08, 0xF212, 0xC21B, 0x621B, 0x029C, 0x0398,
+                    0x0451, 0x050A, 0x1549, 0x6D09, 0xC488, 0x0000, 0x0000, 0x0000,
+                    0xFFFF, 0xFD0C, 0xFC0A, 0xFB94, 0xFB1E, 0xB31F, 0x33DF, 0x051F,
+                    0x269D, 0x0753, 0x478E, 0x970E, 0xE68C, 0x630C, 0x0000, 0x0000,
+                    0xFFFF, 0xFE92, 0xFDD4, 0xFD98, 0xFD9C, 0xEDDF, 0xBE5F, 0xA6DF,
+                    0x979F, 0x8799, 0xA794, 0xCFF4, 0xF7F4, 0xA514, 0x0000, 0x0000
+                }[palette_ram[color ? palette | color : 0] & 63];
           }
 
           // Update shift registers every cycle.

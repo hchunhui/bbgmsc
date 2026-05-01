@@ -74,7 +74,7 @@ static void update_noise(Noise *n, int16_t *buffer, int count)
 			}
 
 			float vol = n->volume;
-			if ((n->shift_reg & 1)) vol = 0.0f;
+			if ((n->shift_reg & 1)) vol = -vol;
 			buffer[i] += vol * 0.3f * 32767;
 		}
 
