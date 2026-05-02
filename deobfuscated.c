@@ -7,13 +7,17 @@
 #define SDL_SCANCODE_DOWN 81
 #define SDL_SCANCODE_LEFT 80
 #define SDL_SCANCODE_RIGHT 79
+#define WASM_EXPORT __attribute__ ((visibility ("default")))
 #else
 #include <SDL2/SDL.h>
+#define WASM_EXPORT
 #endif
 
 #include <stdint.h>
 #include "bbk/bbk.h"
 #include "apu.h"
+
+void dump();
 
 #define PULL mem(++S, 1, 0, 0)
 #define PUSH(x) mem(S--, 1, x, 1)
@@ -311,7 +315,7 @@ uint8_t read_pc() {
 
 // Set N (negative) and Z (zero) flags of `P` register, based on `val`.
 uint8_t set_nz(uint8_t val) { return P = P & 125 | val & 128 | !val * 2; }
-void init(char *fdd);
+WASM_EXPORT void init(char *fdd);
 int loop();
 
 void audio_callback(void* ud, uint8_t* stream, int len)
@@ -333,7 +337,7 @@ void audio_callback(void* ud, uint8_t* stream, int len)
 #ifdef __wasm__
 #include <string.h>
 #include <stdio.h>
-void set_rom(char *name) {
+WASM_EXPORT void set_rom(char *name) {
   FILE *fp = fopen(name, "rb");
   fseek(fp, 0, SEEK_END);
   int size = ftell(fp);
@@ -343,29 +347,29 @@ void set_rom(char *name) {
   apu_reset(&apu);
 }
 
-void *get_frame_buffer() {
+WASM_EXPORT void *get_frame_buffer() {
   return frame_buffer;
 }
 
-void *get_key_state() {
+WASM_EXPORT void *get_key_state() {
   static uint8_t k[256];
   key_state = k;
   return key_state;
 }
 
-void loop_many() {
+WASM_EXPORT void loop_many() {
   while (loop() != 2);
 }
 
 #define SAMPLE_NUM 2048
 static float audiobuf[SAMPLE_NUM];
 static int16_t buf[SAMPLE_NUM];
-int wasm_getaudiolen()
+WASM_EXPORT int wasm_getaudiolen()
 {
   return SAMPLE_NUM;
 }
 
-float *wasm_getaudio()
+WASM_EXPORT float *wasm_getaudio()
 {
   audio_callback(NULL, (void *) buf, SAMPLE_NUM * 2);
   for (int i = 0; i < SAMPLE_NUM; i++) {
