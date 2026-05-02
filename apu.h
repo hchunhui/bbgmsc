@@ -5,12 +5,12 @@
 #define SAMPLING_RATE 44100
 
 typedef struct {
-	float freq;
-	float phase;
-	float duty;
-	float volume;
-	float sweep;
-	float decay;
+	int32_t freq;
+	int32_t phase;
+	int32_t duty;
+	int32_t volume;
+	int32_t sweep;
+	int32_t decay;
 	int timer;
 	int length_en;
 	int length;
@@ -18,9 +18,8 @@ typedef struct {
 } Pulse;
 
 typedef struct {
-	float freq;
-	float phase;
-	float volume;
+	int32_t freq;
+	int32_t phase;
 	int timer;
 	int length_en;
 	int length;
@@ -32,8 +31,8 @@ typedef struct {
 	int mode;
 	int timer;
 	int period;
-	float volume;
-	float decay;
+	int32_t volume;
+	int32_t decay;
 	int length_en;
 	int length;
 	int active;
