@@ -201,6 +201,8 @@ function register_kbdmouse(ptr)
         if (code in codemap) {
             const i = codemap[code];
             mem8[ptr + i] = keypress;
+        } else if (ev.keyCode === 20) {
+            mem8[ptr + codemap['Capslock']] = keypress;
         }
     }
 
