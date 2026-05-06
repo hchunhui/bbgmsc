@@ -53,12 +53,6 @@ function __console_print(ptr)
 }
 
 const filestore = {}
-const filestore_list = []
-function __filestore_fetch(pathptr)
-{
-    const path = get_string(pathptr);
-    filestore_list.push(path);
-}
 
 function __open_get_size(pathptr)
 {
@@ -230,7 +224,6 @@ const imports = {
         exit,
         __get_mticks,
         __console_print,
-        __filestore_fetch,
         __open_get_size,
         __open,
         __read,
@@ -250,7 +243,7 @@ const imports = {
 const fetchopt = { cache: 'no-store' };
 
 function loads(files, i, cont) {
-    if (i == files.length)
+    if (i == files.length || (files[i] in filestore))
         cont();
     else {
         dolog('fetch ' + files[i] + ' ...\n');
@@ -340,5 +333,6 @@ return {
     stop,
     set_logger: function (o) { logger = o; },
     set_keypress: function (key, down) { mem8[keypress_ptr + key] = down; },
+    set_file: function (name, data) { filestore[name] = data; },
 };
 }
